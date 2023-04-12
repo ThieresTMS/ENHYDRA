@@ -11,8 +11,9 @@ def read_config_file(fh_project, fh_code):
     parameters['inputdir'] = read_line("inputdir", fh_project)
     parameters['outdir'] = read_line("outdir", fh_project)
     parameters['min_species'] = read_line("min_species", fh_project)
+    parameters['anchor'] = read_line("anchor", fh_project)
     parameters['mafft'] = read_line("mafft", fh_code)
-    parameters['trimmal'] = read_line("trimmal", fh_code)
+    parameters['trimal'] = read_line("trimal", fh_code)
     return parameters
 
 
@@ -40,6 +41,8 @@ def check_parameters(parameters, code_config):
     if parameters['min_species'] == "":
         exit("No minimum number of species per group was specified in your project's configuration file, please fill the the parameter 'min_species'.")
 
+
+##insegir aqui checagem para o genoma ancora
 
 ##inserir aqui a checagem para o mafft##
 
@@ -79,8 +82,8 @@ def filter_length(parameters, inputfiles):
             stddev = statistics.stdev(lengths)
         outstats.write("##Overal sequence length stats\n")
         outstats.write("Total seqs: %s\nAverage: %s\nMedian: %s\nSD: %s\n" % (total_seqs, mean, median, stddev))
-        outstats.write("##Sequence lenghts (sorted form smallest to largest)\n")
-        outstats.write("#SequenceID\tLenght\tPercentageDifFromAvg\n")
+        outstats.write("##Sequence lengths (sorted form smallest to largest)\n")
+        outstats.write("#SequenceID\tLength\tPercentageDifFromAvg\n")
         keys = list(length_data.keys())
         values = list(length_data.values())
         sorted_value_index = np.argsort(values)
@@ -95,7 +98,6 @@ def filter_length(parameters, inputfiles):
             smaller = (mean - (2*stddev))
             if (len(seq) < smaller) or (len(seq) > greater):
                 continue
-                #print("%s é menor que %s ou é maior que %s" % (len(seq), smaller, greater))
             else:
                 outfile.write(">%s\n%s\n" % (seq_record.id, seq))
 
@@ -107,6 +109,7 @@ def filter_groups(parameters, outlog):
     in_dir_path = parameters['outdir'] + "/length_filter"
     files = os.listdir(in_dir_path)
     for file in files:
+        file_fields = file.split(".")
         path_to_file = in_dir_path + "/" + file
         outfile_path = out + "/" + file
         species_ids = []
@@ -115,10 +118,14 @@ def filter_groups(parameters, outlog):
             sid = ids_fields[0]
             species_ids.append(sid)
         uniq_ids = list(set(species_ids))
+        if parameters['anchor'] not in uniq_ids:
+            outlog.write("Group %s not contain any sequence of anchor species %s. Group removed from analysis\n" % (file_fields[0], parameters['anchor']))
+            continue
         if len(uniq_ids) < int(parameters['min_species']):
-            outlog.write("Number of species in group %s is less than minimum required %s , group removed from analysis\n" % (file, parameters['min_species']))
+            outlog.write("Number of species in group %s is less than minimum required %s , group removed from analysis\n" % (file_fields[0], parameters['min_species']))
         else:
             os.system('cp %s %s' % (path_to_file, outfile_path))
+
 
 def run_mafft(parameters):
 
@@ -130,10 +137,10 @@ def run_mafft(parameters):
     for file in input_files:
         input_seq = dirpath + "/" + file
         output_seq = outdir + "/" + file + ".aln"
-        os.system('%s --auto  %s > %s' % (parameters['mafft'], input_seq, output_seq ) )
+        os.system('%s --auto --quiet  %s > %s' % (parameters['mafft'], input_seq, output_seq))
 
 
-def run_trimmal(parameters):
+def run_trimal(parameters):
     dirpath = parameters['outdir'] + '/alignment'
     input_files = os.listdir(dirpath)
     outdir = parameters['outdir'] + '/ident_alignment'
@@ -142,5 +149,43 @@ def run_trimmal(parameters):
     for file in input_files:
         input_seq = dirpath + "/" + file
         outident = outdir + "/" + file + ".ident"
-        os.system('%s -sident -in %s > %s' % (parameters['trimmal'], input_seq, outident))
+        os.system('%s -sident -in %s > %s' % (parameters['trimal'], input_seq, outident)),
+
+
+def make_tables(parameters):
+    tables = parameters['outdir'] + "/tables"
+    if not os.path.isdir(tables):
+        os.mkdir(tables)
+    dirpath1 = parameters['outdir'] + "/alignment"
+    input_files1 = os.listdir(dirpath1)
+    group2anchor_path = tables + "/group2anchor.tsv"
+    group2anchor= open(group2anchor_path, "a")
+    for file1 in input_files1:
+        aux = file1.split(".")
+        group_name = aux[0]
+        seq_file = dirpath1 + '/' + file1
+        for seq_record in SeqIO.parse(seq_file, "fasta"):
+            ids_fields = seq_record.id.split("|")
+            specie = ids_fields[0]
+            sequence_id = ids_fields[1]
+            if specie == parameters['anchor']:
+                group2anchor.write("%s\t%s\n" % (group_name, sequence_id))
+    dirpath2 = parameters['outdir'] + "/ident_alignment"
+    input_files2 = os.listdir(dirpath2)
+    group2mean_path = tables + "/group2mean.tsv"
+    group2mean = open(group2mean_path, "a")
+    for file2 in input_files2:
+        aux2 = file2.split(".")
+        group_name2 = aux2[0]
+        ident_files = dirpath2 + '/' + file2
+        ident_file = open(ident_files, "r")
+        for line in ident_file:
+            line = line.rstrip()
+            match = re.search("identity:", line)
+            if match:
+                values = line.split()
+                mean_percent = values[-1]
+                group2mean.write("%s\t%s\n" % (group_name2, mean_percent))
+
+
 
