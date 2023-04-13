@@ -1,6 +1,7 @@
 import sys
 import os
 import code_modules
+import multiprocessing
 project_config = sys.argv[2]
 code_config = sys.argv[1]
 
@@ -33,9 +34,19 @@ outlog = open(log_path, "a")
 print("Welcome to Code")
 outlog.write("Welcome to Code\n")
 
+#code_modules.filter_length(parameters, inputfiles)
+length_out_seq = parameters['outdir'] + "/length_filter"
+length_out_stats = parameters['outdir'] + "/length_stats"
+if not os.path.isdir(length_out_seq):
+    os.mkdir(length_out_seq)
+if not os.path.isdir(length_out_stats):
+    os.mkdir(length_out_stats)
 
-code_modules.filter_length(parameters, inputfiles)
+with multiprocessing.Pool(processes=parameters['max_process']) as pool:
+      arg = [(parameters, files) for files in inputfiles]
+      pool.starmap(code_modules.filter_length, arg)
 
+print("Se fudeu")
 code_modules.filter_groups(parameters, outlog)
 
 code_modules.run_mafft(parameters)
