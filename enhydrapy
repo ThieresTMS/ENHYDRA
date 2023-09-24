@@ -1,6 +1,6 @@
 import sys
 import os
-import code_modules
+import enhydra_modules
 import multiprocessing
 project_config = sys.argv[2]
 code_config = sys.argv[1]
