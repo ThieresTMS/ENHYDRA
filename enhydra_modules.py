@@ -10,7 +10,7 @@ def read_config_file(fh_project, fh_code):
     parameters = {}
     parameters['inputdir'] = read_line("inputdir", fh_project)
     parameters['outdir'] = read_line("outdir", fh_project)
-    parameters['min_species'] = read_line("min_species", fh_project)
+    parameters['min_species'] = int(read_line("min_species", fh_project))
     parameters['anchor'] = read_line("anchor", fh_project)
     parameters['mafft'] = read_line("mafft", fh_code)
     parameters['trimal'] = read_line("trimal", fh_code)
@@ -42,15 +42,26 @@ def check_parameters(parameters, code_config):
     if parameters['min_species'] == "":
         exit("No minimum number of species per group was specified in your project's configuration file, please fill the the parameter 'min_species'.")
 
+    if parameters['anchor'] == "":
+        exit("No anchor species was specified in project_config, please open this file and fill the parameter 'anchor'")
+    if parameters['max_process'] == "":
+        exit("Maximum number of process was not specified in project_config, please open this file and fill the parameter 'max_process'")
 
-##insegir aqui checagem para o genoma ancora
+    if parameters['trimal'] == "":
+        exit("No path to trimal was specified in code_config at %s, please open this file and fill the parameter 'trimal'" % code_config)
+    if not os.path.isfile(parameters['trimal']):
+        exit("The executable of trimal wasn't found in the specified path, please check if the path is correct: %s" % parameters['trimal'])
+    if not os.access(parameters['trimal'], os.R_OK):
+        exit("You don't have permission to execute the trimal file specified at code_config, please check permissions or replace the file")
 
-##inserir aqui a checagem para o mafft##
+    if parameters['mafft'] == "":
+        exit("No path to mafft was specified in code_config at %s, please open this file and fill the parameter 'mafft'" % code_config)
+    if not os.path.isfile(parameters['mafft']):
+        exit("The executable of mafft wasn't found in the specified path, please check if the path is correct: %s" % parameters['mafft'])
+    if not os.access(parameters['mafft'], os.R_OK):
+        exit("You don't have permission to execute the mafft file specified at code_config, please check permissions or replace the file")
 
-##inserir aqui a checagem para o trimmal##
-
-
-def filter_length(parameters, file):
+def filter_length(parameters, outlog, file):
     inputfile = parameters['inputdir'] + "/" + file
     if os.stat(inputfile).st_size == 0:
         return
@@ -91,7 +102,7 @@ def filter_length(parameters, file):
         greater = (mean + (2*stddev))
         smaller = (mean - (2*stddev))
         if (len(seq) < smaller) or (len(seq) > greater):
-            continue
+            outlog.write("Sequence %s in group %s removed for length filter step\n" % (seq_record.id, file))
         else:
             outfile.write(">%s\n%s\n" % (seq_record.id, seq))
 
@@ -185,3 +196,4 @@ def make_tables(parameters):
             if specie == parameters['anchor']:
                 anchor2mean.write("%s\t%s\n" % (sequence_id, ortho_mean[group_name]))
                 group2anchor.write("%s\t%s\n" % (group_name, sequence_id))
+                    
